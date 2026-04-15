@@ -11,6 +11,7 @@ interface StudentRow {
   id: number;
   nim: string;
   nama: string;
+  owner_username: string;
 }
 
 interface AssistanceSessionRow {
@@ -64,24 +65,37 @@ function assignScoreBag(
   };
 }
 
-export async function getGradingSnapshot(): Promise<GradingSnapshot> {
+export async function getGradingSnapshot(
+  ownerUsername: string
+): Promise<GradingSnapshot> {
   const db = getDb();
-  const [studentResult, sessionResult, moduleScoreResult, assistanceScoreResult] =
-    await Promise.all([
-      db.from('students').select('id, nim, nama').order('created_at', { ascending: true }).order('id', { ascending: true }),
-      db.from('assistance_sessions').select('id, student_id, tgl_asistensi').order('tgl_asistensi', { ascending: true }).order('id', { ascending: true }),
-      db.from('module_session_scores').select('assistance_session_id, criterion_id, quick_select, manual_value, final_score'),
-      db.from('assistance_scores').select('assistance_session_id, criterion_id, quick_select, manual_value, final_score'),
-    ]);
+  const studentResult = await db
+    .from('students')
+    .select('id, nim, nama, owner_username')
+    .eq('owner_username', ownerUsername)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
 
   if (studentResult.error) throw studentResult.error;
-  if (sessionResult.error) throw sessionResult.error;
-  if (moduleScoreResult.error) throw moduleScoreResult.error;
-  if (assistanceScoreResult.error) throw assistanceScoreResult.error;
 
   const students = (studentResult.data || []).map((row) =>
     mapStudent(row as StudentRow)
   );
+
+  if (students.length === 0) {
+    return { students: [], sessions: {}, moduleScores: {}, assistanceScores: {} };
+  }
+
+  const studentIds = students.map((student) => Number(student.id));
+  const sessionResult = await db
+    .from('assistance_sessions')
+    .select('id, student_id, tgl_asistensi')
+    .in('student_id', studentIds)
+    .order('tgl_asistensi', { ascending: true })
+    .order('id', { ascending: true });
+
+  if (sessionResult.error) throw sessionResult.error;
+
   const sessions: Record<string, AssistanceSession[]> = {};
   const moduleScores: ModuleScores = {};
   const assistanceScores: AssistanceScores = {};
@@ -101,6 +115,25 @@ export async function getGradingSnapshot(): Promise<GradingSnapshot> {
     assistanceScores[session.id] ??= {};
   }
 
+  const sessionIds = Object.keys(moduleScores).map((sessionId) => Number(sessionId));
+  if (sessionIds.length === 0) {
+    return { students, sessions, moduleScores, assistanceScores };
+  }
+
+  const [moduleScoreResult, assistanceScoreResult] = await Promise.all([
+    db
+      .from('module_session_scores')
+      .select('assistance_session_id, criterion_id, quick_select, manual_value, final_score')
+      .in('assistance_session_id', sessionIds),
+    db
+      .from('assistance_scores')
+      .select('assistance_session_id, criterion_id, quick_select, manual_value, final_score')
+      .in('assistance_session_id', sessionIds),
+  ]);
+
+  if (moduleScoreResult.error) throw moduleScoreResult.error;
+  if (assistanceScoreResult.error) throw assistanceScoreResult.error;
+
   for (const row of (moduleScoreResult.data || []) as SessionScoreRow[]) {
     assignScoreBag(moduleScores, String(row.assistance_session_id), row);
   }
@@ -112,33 +145,97 @@ export async function getGradingSnapshot(): Promise<GradingSnapshot> {
   return { students, sessions, moduleScores, assistanceScores };
 }
 
-export async function createStudent(nim: string, nama: string): Promise<Student> {
+export async function createStudent(
+  nim: string,
+  nama: string,
+  ownerUsername: string
+): Promise<Student> {
   const db = getDb();
   const result = await db
     .from('students')
-    .insert({ nim, nama })
-    .select('id, nim, nama')
+    .insert({ nim, nama, owner_username: ownerUsername })
+    .select('id, nim, nama, owner_username')
     .single();
 
   if (result.error || !result.data) throw result.error;
   return mapStudent(result.data as StudentRow);
 }
 
-export async function deleteStudent(studentId: string) {
+export async function deleteStudent(studentId: string, ownerUsername: string) {
   const db = getDb();
-  const result = await db.from('students').delete().eq('id', Number(studentId));
+  const ownedStudentId = await getOwnedStudentId(studentId, ownerUsername);
+  if (!ownedStudentId) {
+    throw new Error('MAHASISWA_TIDAK_DITEMUKAN');
+  }
+
+  const result = await db
+    .from('students')
+    .delete()
+    .eq('id', ownedStudentId);
   if (result.error) throw result.error;
+}
+
+async function getOwnedStudentId(
+  studentId: string,
+  ownerUsername: string
+): Promise<number | null> {
+  const db = getDb();
+  const result = await db
+    .from('students')
+    .select('id')
+    .eq('id', Number(studentId))
+    .eq('owner_username', ownerUsername)
+    .limit(1)
+    .maybeSingle();
+
+  if (result.error) throw result.error;
+  if (!result.data) return null;
+  return Number(result.data.id);
+}
+
+async function getOwnedSessionId(
+  sessionId: string,
+  ownerUsername: string
+): Promise<number | null> {
+  const db = getDb();
+  const sessionResult = await db
+    .from('assistance_sessions')
+    .select('id, student_id')
+    .eq('id', Number(sessionId))
+    .limit(1)
+    .maybeSingle();
+
+  if (sessionResult.error) throw sessionResult.error;
+  if (!sessionResult.data) return null;
+
+  const studentResult = await db
+    .from('students')
+    .select('id')
+    .eq('id', Number(sessionResult.data.student_id))
+    .eq('owner_username', ownerUsername)
+    .limit(1)
+    .maybeSingle();
+
+  if (studentResult.error) throw studentResult.error;
+  if (!studentResult.data) return null;
+  return Number(sessionResult.data.id);
 }
 
 export async function createSession(
   studentId: string,
-  tglAsistensi: string
+  tglAsistensi: string,
+  ownerUsername: string
 ): Promise<AssistanceSession> {
   const db = getDb();
+  const ownedStudentId = await getOwnedStudentId(studentId, ownerUsername);
+  if (!ownedStudentId) {
+    throw new Error('MAHASISWA_TIDAK_DITEMUKAN');
+  }
+
   const result = await db
     .from('assistance_sessions')
     .insert({
-      student_id: Number(studentId),
+      student_id: ownedStudentId,
       tgl_asistensi: tglAsistensi,
     })
     .select('id, student_id, tgl_asistensi')
@@ -151,24 +248,35 @@ export async function createSession(
   });
 }
 
-export async function deleteSession(sessionId: string) {
+export async function deleteSession(sessionId: string, ownerUsername: string) {
   const db = getDb();
+  const ownedSessionId = await getOwnedSessionId(sessionId, ownerUsername);
+  if (!ownedSessionId) {
+    throw new Error('SESI_TIDAK_DITEMUKAN');
+  }
+
   const result = await db
     .from('assistance_sessions')
     .delete()
-    .eq('id', Number(sessionId));
+    .eq('id', ownedSessionId);
   if (result.error) throw result.error;
 }
 
 async function upsertSessionScore(
   tableName: 'module_session_scores' | 'assistance_scores',
   sessionId: string,
-  score: CriterionScore
+  score: CriterionScore,
+  ownerUsername: string
 ) {
   const db = getDb();
+  const ownedSessionId = await getOwnedSessionId(sessionId, ownerUsername);
+  if (!ownedSessionId) {
+    throw new Error('SESI_TIDAK_DITEMUKAN');
+  }
+
   const result = await db.from(tableName).upsert(
     {
-      assistance_session_id: Number(sessionId),
+      assistance_session_id: ownedSessionId,
       criterion_id: score.criterionId,
       quick_select: score.quickSelect,
       manual_value: score.manualValue,
@@ -185,14 +293,16 @@ async function upsertSessionScore(
 
 export async function upsertModuleScore(
   sessionId: string,
-  score: CriterionScore
+  score: CriterionScore,
+  ownerUsername: string
 ) {
-  await upsertSessionScore('module_session_scores', sessionId, score);
+  await upsertSessionScore('module_session_scores', sessionId, score, ownerUsername);
 }
 
 export async function upsertAssistanceScore(
   sessionId: string,
-  score: CriterionScore
+  score: CriterionScore,
+  ownerUsername: string
 ) {
-  await upsertSessionScore('assistance_scores', sessionId, score);
+  await upsertSessionScore('assistance_scores', sessionId, score, ownerUsername);
 }

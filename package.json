@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "db:migrate": "set -a && . ./.env.local && set +a && test -n \"$SUPABASE_DB_URL\" && psql \"$SUPABASE_DB_URL\" -f database/schema.sql"
+    "db:migrate": "set -a && . ./.env.local && set +a && test -n \"$SUPABASE_DB_URL\" && psql \"$SUPABASE_DB_URL\" -f database/schema.sql",
+    "seed:users": "node scripts/user-generator.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

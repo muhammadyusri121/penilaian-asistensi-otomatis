@@ -1,7 +1,7 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { PostgrestClient } from '@supabase/postgrest-js';
 
 declare global {
-  var __gradingSupabase: SupabaseClient | undefined;
+  var __gradingSupabase: PostgrestClient | undefined;
 }
 
 function createSupabaseClient() {
@@ -21,10 +21,12 @@ function createSupabaseClient() {
     );
   }
 
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
+  const restUrl = `${supabaseUrl.replace(/\/$/, '')}/rest/v1`;
+
+  return new PostgrestClient(restUrl, {
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
     },
   });
 }

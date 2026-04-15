@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
 import { upsertAssistanceScore } from '@/lib/server/gradingStore';
 import type { CriterionScore } from '@/lib/gradingTypes';
+import { getAuthenticatedUsername } from '@/lib/server/auth';
 
 export async function PUT(request: Request) {
   try {
+    const ownerUsername = getAuthenticatedUsername();
+    if (!ownerUsername) {
+      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+    }
+
     const body = await request.json();
     const assistanceSessionId =
       typeof body.assistanceSessionId === 'string'
@@ -34,9 +40,16 @@ export async function PUT(request: Request) {
       );
     }
 
-    await upsertAssistanceScore(assistanceSessionId, score);
+    await upsertAssistanceScore(assistanceSessionId, score, ownerUsername);
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof Error && error.message === 'SESI_TIDAK_DITEMUKAN') {
+      return NextResponse.json(
+        { error: 'Sesi asistensi tidak ditemukan.' },
+        { status: 404 }
+      );
+    }
+
     console.error('Failed to save assistance score', error);
     return NextResponse.json(
       { error: 'Gagal menyimpan nilai asistensi.' },

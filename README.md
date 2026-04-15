@@ -13,6 +13,8 @@ Aplikasi web penilaian asistensi dan modul berbasis Next.js 13 + Supabase.
 ## Fitur Utama
 
 - Manajemen data mahasiswa
+- User tunggal berbasis file generator
+- Login wajib sebelum masuk ke dashboard
 - Manajemen sesi asistensi per mahasiswa
 - Penilaian kriteria (quick select dan nilai manual)
 - Penyimpanan nilai asistensi dan nilai modul ke database
@@ -20,9 +22,15 @@ Aplikasi web penilaian asistensi dan modul berbasis Next.js 13 + Supabase.
 ## Struktur Penting
 
 - `app/api/*`: API routes untuk CRUD mahasiswa, sesi, dan nilai
+- `app/api/users/*`: API route baca user
+- `app/login`: halaman login
 - `lib/server/gradingStore.ts`: akses data utama ke Supabase
+- `lib/server/userStore.ts`: akses data user ke Supabase
 - `lib/db.ts`: inisialisasi Supabase client server-side
 - `database/schema.sql`: schema tabel PostgreSQL
+- `database/user-generator.json`: file sumber data user tunggal
+- `lib/server/auth.ts`: utilitas token login
+- `lib/server/userGenerator.ts`: baca file user generator
 
 ## Prasyarat
 
@@ -61,7 +69,18 @@ SUPABASE_DB_URL=postgresql://postgres.your-project-ref:your-password@aws-0-regio
 npm run db:migrate
 ```
 
-5. Jalankan aplikasi development.
+5. Isi data user dari file generator.
+
+```bash
+npm run seed:users
+```
+
+Catatan:
+- Edit `database/user-generator.json` secara manual untuk mengubah user.
+- Script `seed:users` akan mengosongkan tabel user lalu mengisi ulang dari file.
+- Setelah login, dashboard terbuka. Jika belum login, otomatis diarahkan ke halaman login.
+
+6. Jalankan aplikasi development.
 
 ```bash
 npm run dev
@@ -77,6 +96,7 @@ Aplikasi tersedia di `http://localhost:3000`.
 - `npm run lint`: linting
 - `npm run typecheck`: pengecekan TypeScript
 - `npm run db:migrate`: apply `database/schema.sql` ke Supabase
+- `npm run seed:users`: sinkronkan data user dari `database/user-generator.json`
 
 ## Deploy ke Netlify
 

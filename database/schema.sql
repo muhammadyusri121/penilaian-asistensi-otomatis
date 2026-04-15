@@ -1,9 +1,38 @@
 create table if not exists students (
   id bigserial primary key,
-  nim varchar(50) not null unique,
+  nim varchar(50) not null,
   nama text not null,
+  owner_username varchar(50) not null default '',
+  created_at timestamptz not null default now(),
+  unique (owner_username, nim)
+);
+
+alter table if exists students
+  add column if not exists owner_username varchar(50) not null default '';
+
+alter table if exists students
+  drop constraint if exists students_nim_key;
+
+alter table if exists students
+  add constraint students_owner_username_nim_key unique (owner_username, nim);
+
+create index if not exists idx_students_owner_username on students(owner_username);
+
+create table if not exists app_users (
+  id bigserial primary key,
+  username varchar(50) not null unique,
+  full_name text not null,
+  is_active boolean not null default true,
+  password_hash text not null default '',
+  password_salt text not null default '',
   created_at timestamptz not null default now()
 );
+
+alter table if exists app_users
+  add column if not exists password_hash text not null default '';
+
+alter table if exists app_users
+  add column if not exists password_salt text not null default '';
 
 create table if not exists student_scores (
   student_id bigint not null references students(id) on delete cascade,

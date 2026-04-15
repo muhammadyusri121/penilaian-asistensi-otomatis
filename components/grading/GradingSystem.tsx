@@ -1,7 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Download, GraduationCap, TriangleAlert as AlertTriangle } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  Download,
+  GraduationCap,
+  KeyRound,
+  LogOut,
+  TriangleAlert as AlertTriangle,
+} from 'lucide-react';
 import { gradingConfig } from '@/lib/gradingConfig';
 import { exportStudentToExcel } from '@/lib/exportExcel';
 import StudentManager from './StudentManager';
@@ -14,7 +20,14 @@ import type {
   Student,
 } from '@/lib/gradingTypes';
 
-export default function GradingSystem() {
+interface GradingSystemProps {
+  currentUser: {
+    username: string;
+    fullName: string;
+  };
+}
+
+export default function GradingSystem({ currentUser }: GradingSystemProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Record<string, AssistanceSession[]>>({});
@@ -25,6 +38,13 @@ export default function GradingSystem() {
   const [loadError, setLoadError] = useState('');
   const [syncError, setSyncError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const saveTimersRef = useRef<Record<string, number>>({});
 
   const moduleCriteria = gradingConfig
@@ -39,22 +59,25 @@ export default function GradingSystem() {
     setLoadError('');
 
     try {
-      const response = await fetch('/api/students', { cache: 'no-store' });
-      const data = await response.json();
+      const studentResponse = await fetch('/api/students', { cache: 'no-store' });
+      const studentData = await studentResponse.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Gagal memuat data.');
+      if (!studentResponse.ok) {
+        throw new Error(studentData.error || 'Gagal memuat data.');
       }
 
-      setStudents(data.students);
-      setSessions(data.sessions);
-      setModuleScores(data.moduleScores);
-      setAssistanceScores(data.assistanceScores);
+      setStudents(studentData.students);
+      setSessions(studentData.sessions);
+      setModuleScores(studentData.moduleScores);
+      setAssistanceScores(studentData.assistanceScores);
       setActiveStudentId((current) => {
-        if (current && data.students.some((student: Student) => student.id === current)) {
+        if (
+          current &&
+          studentData.students.some((student: Student) => student.id === current)
+        ) {
           return current;
         }
-        return data.students[0]?.id ?? null;
+        return studentData.students[0]?.id ?? null;
       });
     } catch (error) {
       console.error(error);
@@ -65,6 +88,60 @@ export default function GradingSystem() {
       setIsLoading(false);
     }
   }, []);
+
+  const handleLogout = useCallback(async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/login';
+  }, []);
+
+  const handleChangePassword = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setPasswordError('');
+      setPasswordSuccess('');
+
+      if (!currentPassword || !newPassword || !confirmNewPassword) {
+        setPasswordError('Semua field password wajib diisi.');
+        return;
+      }
+
+      if (newPassword.length < 6) {
+        setPasswordError('Password baru minimal 6 karakter.');
+        return;
+      }
+
+      if (newPassword !== confirmNewPassword) {
+        setPasswordError('Konfirmasi password baru tidak cocok.');
+        return;
+      }
+
+      setIsChangingPassword(true);
+      try {
+        const response = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Gagal mengubah password.');
+        }
+
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setPasswordSuccess('Password berhasil diubah.');
+      } catch (error) {
+        setPasswordError(
+          error instanceof Error ? error.message : 'Gagal mengubah password.'
+        );
+      } finally {
+        setIsChangingPassword(false);
+      }
+    },
+    [confirmNewPassword, currentPassword, newPassword]
+  );
 
   useEffect(() => {
     loadData();
@@ -413,40 +490,125 @@ export default function GradingSystem() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50 to-slate-100">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-sky-500 flex items-center justify-center shadow-sm">
-              <GraduationCap className="w-5 h-5 text-white" />
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-4 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-sky-500 flex items-center justify-center shadow-sm">
+                <GraduationCap className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-base font-extrabold text-slate-900 leading-tight">
+                  Sistem Penilaian Praktikum
+                </h1>
+                <p className="text-xs text-slate-500">
+                  Selamat datang, <span className="font-semibold">{currentUser.fullName}</span>
+                  <span className="text-slate-400"> ({currentUser.username})</span>
+                </p>
+                <p className="text-xs text-slate-400">
+                  {completeSessionCount > 0
+                    ? `${completeSessionCount} sesi penilaian lengkap`
+                    : 'Tambahkan mahasiswa untuk memulai'}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-base font-extrabold text-slate-900 leading-tight">
-                Sistem Penilaian Praktikum
-              </h1>
-              <p className="text-xs text-slate-400">
-                {completeSessionCount > 0
-                  ? `${completeSessionCount} sesi penilaian lengkap`
-                  : 'Tambahkan mahasiswa untuk memulai'}
-              </p>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {(exportError || syncError || loadError) && (
+                <div className="hidden md:flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl max-w-xs">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span className="line-clamp-2">{loadError || syncError || exportError}</span>
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  setShowPasswordForm((prev) => !prev);
+                  setPasswordError('');
+                  setPasswordSuccess('');
+                }}
+                className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-sm rounded-xl px-4 py-2.5 transition-colors shadow-sm"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span className="hidden sm:inline">Ubah Sandi</span>
+              </button>
+              <button
+                onClick={handleExport}
+                disabled={!activeStudent || isLoading}
+                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl px-4 py-2.5 transition-colors shadow-sm"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Export Nilai Mahasiswa</span>
+                <span className="sm:hidden">Export</span>
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm rounded-xl px-4 py-2.5 transition-colors shadow-sm"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {(exportError || syncError || loadError) && (
-              <div className="hidden md:flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl max-w-xs">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                <span className="line-clamp-2">{loadError || syncError || exportError}</span>
-              </div>
-            )}
-            <button
-              onClick={handleExport}
-              disabled={!activeStudent || isLoading}
-              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl px-4 py-2.5 transition-colors shadow-sm"
+          {showPasswordForm && (
+            <form
+              onSubmit={handleChangePassword}
+              className="bg-slate-50 border border-slate-200 rounded-2xl p-4"
             >
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Export Mahasiswa Aktif</span>
-              <span className="sm:hidden">Export</span>
-            </button>
-          </div>
+              <p className="text-sm font-semibold text-slate-700 mb-3">Ubah Sandi Akun</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <input
+                  type="password"
+                  placeholder="Password lama"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
+                />
+                <input
+                  type="password"
+                  placeholder="Password baru"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
+                />
+                <input
+                  type="password"
+                  placeholder="Konfirmasi password baru"
+                  value={confirmNewPassword}
+                  onChange={(event) => setConfirmNewPassword(event.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
+                />
+              </div>
+              {(passwordError || passwordSuccess) && (
+                <p
+                  className={`mt-3 text-xs ${
+                    passwordError ? 'text-rose-600' : 'text-emerald-600'
+                  }`}
+                >
+                  {passwordError || passwordSuccess}
+                </p>
+              )}
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={isChangingPassword}
+                  className="bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-300 text-white text-sm font-semibold rounded-xl px-4 py-2"
+                >
+                  {isChangingPassword ? 'Menyimpan...' : 'Simpan Sandi'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPasswordForm(false);
+                    setPasswordError('');
+                    setPasswordSuccess('');
+                  }}
+                  className="bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-xl px-4 py-2"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
         {(exportError || syncError || loadError) && (

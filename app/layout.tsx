@@ -6,7 +6,8 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
   ),
   title: 'Sistem Penilaian Praktikum',
-  description: 'Aplikasi penilaian praktikum berbasis web dengan ekspor Excel',
+  description:
+    'Aplikasi penilaian praktikum berbasis web dengan manajemen user, sesi asistensi, dan ekspor Excel',
   openGraph: {
     images: [
       {
@@ -30,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="id">
       <body>{children}</body>
     </html>
   );
