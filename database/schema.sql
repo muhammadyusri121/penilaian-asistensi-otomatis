@@ -49,6 +49,7 @@ create table if not exists assistance_sessions (
   id bigserial primary key,
   student_id bigint not null references students(id) on delete cascade,
   tgl_asistensi date not null,
+  label text,
   created_at timestamptz not null default now()
 );
 

@@ -1,9 +1,18 @@
-'use client';
-
-import { useState } from 'react';
-import { UserPlus, Trash2, ChevronRight, CircleCheck as CheckCircle2, CircleAlert as AlertCircle } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { UserPlus, Trash2, ChevronRight, CircleCheck as CheckCircle2, CircleAlert as AlertCircle, ShieldAlert } from 'lucide-react';
 import { gradingConfig } from '@/lib/gradingConfig';
 import type { Student, ModuleScores, AssistanceSession } from '@/lib/gradingTypes';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
 
 interface StudentManagerProps {
   students: Student[];
@@ -29,6 +38,12 @@ export default function StudentManager({
   const [nim, setNim] = useState('');
   const [nama, setNama] = useState('');
   const [error, setError] = useState('');
+  
+  // States for delete confirmation
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
+  const [deleteCode, setDeleteCode] = useState('');
+  const [userInputCode, setUserInputCode] = useState('');
 
   const moduleCriteria = gradingConfig
     .filter((g) => g.type === 'modul')
@@ -53,6 +68,30 @@ export default function StudentManager({
     setError('');
   };
 
+  const generateCode = useCallback(() => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Avoid ambiguous chars
+    let result = '';
+    for (let i = 0; i < 3; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }, []);
+
+  const openDeleteDialog = (student: Student) => {
+    setStudentToDelete(student);
+    setDeleteCode(generateCode());
+    setUserInputCode('');
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (userInputCode.toUpperCase() === deleteCode && studentToDelete) {
+      onDeleteStudent(studentToDelete.id);
+      setIsDeleteDialogOpen(false);
+      setStudentToDelete(null);
+    }
+  };
+
   const isComplete = (studentId: string) => {
     const scores = moduleScores[studentId] || {};
     return moduleCriteria.every((c) => scores[c.id]?.finalScore != null);
@@ -69,7 +108,7 @@ export default function StudentManager({
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
               NIM
             </label>
-            <input
+            <Input
               type="text"
               value={nim}
               disabled={disabled}
@@ -79,14 +118,14 @@ export default function StudentManager({
               }}
               onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
               placeholder="Contoh: 12345678"
-              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition"
+              className="rounded-xl"
             />
           </div>
           <div>
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
               Nama Lengkap
             </label>
-            <input
+            <Input
               type="text"
               value={nama}
               disabled={disabled}
@@ -96,7 +135,7 @@ export default function StudentManager({
               }}
               onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
               placeholder="Contoh: Budi Santoso"
-              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition"
+              className="rounded-xl"
             />
           </div>
 
@@ -188,7 +227,7 @@ export default function StudentManager({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onDeleteStudent(s.id);
+                          openDeleteDialog(s);
                         }}
                         disabled={disabled}
                         className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-rose-400 hover:bg-rose-50 transition-colors"
@@ -208,6 +247,55 @@ export default function StudentManager({
           </ul>
         )}
       </div>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-[400px]">
+          <AlertDialogHeader>
+            <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center mb-2 mx-auto sm:mx-0">
+              <ShieldAlert className="w-6 h-6 text-rose-500" />
+            </div>
+            <AlertDialogTitle className="text-xl font-bold text-slate-800">
+              Apakah anda yakin?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-500 leading-relaxed text-sm">
+              Tindakan ini akan menghapus data mahasiswa <b>{studentToDelete?.nama}</b> dan seluruh riwayat nilai sesi yang terkait secara permanen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="my-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 text-center">
+              Ketikan kode berikut untuk konfirmasi:
+            </p>
+            <div className="flex flex-col items-center gap-3">
+              <span className="text-3xl font-black tracking-[0.5em] text-slate-800 bg-white px-6 py-2 rounded-lg border border-slate-200 select-none tabular-nums shadow-sm">
+                {deleteCode}
+              </span>
+              <Input
+                type="text"
+                value={userInputCode}
+                onChange={(e) => setUserInputCode(e.target.value)}
+                placeholder="Masukkan 3 karakter di atas"
+                className="text-center font-bold uppercase tracking-widest border-slate-200 focus:ring-rose-400 focus:border-rose-400 rounded-xl h-12"
+                maxLength={3}
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="rounded-xl font-semibold border-slate-200 text-slate-600 hover:bg-slate-50">
+              Batal
+            </AlertDialogCancel>
+            <button
+              onClick={handleConfirmDelete}
+              disabled={userInputCode.toUpperCase() !== deleteCode}
+              className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed bg-rose-500 text-white hover:bg-rose-600 shadow-md shadow-rose-100"
+            >
+              Hapus Permanen
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

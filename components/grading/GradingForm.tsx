@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarPlus2, Trash2, UserCog2, Check, X } from 'lucide-react';
+import { CalendarPlus2, Trash2, UserCog2, Check, X, PencilLine } from 'lucide-react';
 import { gradingConfig } from '@/lib/gradingConfig';
 import CriteriaGroup from './CriteriaGroup';
 import ScoreSummary from './ScoreSummary';
@@ -23,6 +23,7 @@ interface GradingFormProps {
   onSelectSession: (sessionId: string) => void;
   onAddSession: (tglAsistensi: string) => void;
   onDeleteSession: (sessionId: string) => void;
+  onUpdateSession: (sessionId: string, label: string | null) => void;
   onUpdateStudent: (id: string, nim: string, nama: string) => void;
   onModuleScoreChange: (criterionId: string, score: CriterionScore) => void;
   onAssistanceScoreChange: (criterionId: string, score: CriterionScore) => void;
@@ -39,6 +40,7 @@ export default function GradingForm({
   onSelectSession,
   onAddSession,
   onDeleteSession,
+  onUpdateSession,
   onUpdateStudent,
   onModuleScoreChange,
   onAssistanceScoreChange,
@@ -48,6 +50,10 @@ export default function GradingForm({
   const [isEditingStudent, setIsEditingStudent] = useState(false);
   const [editNim, setEditNim] = useState(student.nim);
   const [editNama, setEditNama] = useState(student.nama);
+  
+  // States for session editing
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [sessionLabelInput, setSessionLabelInput] = useState('');
 
   useEffect(() => {
     setEditNim(student.nim);
@@ -102,6 +108,18 @@ export default function GradingForm({
     setEditNim(student.nim);
     setEditNama(student.nama);
     setIsEditingStudent(false);
+  };
+
+  const handleStartEditSession = (session: AssistanceSession, index: number) => {
+    setEditingSessionId(session.id);
+    setSessionLabelInput(session.label || `Sesi ${index + 1}`);
+  };
+
+  const handleSaveSessionLabel = () => {
+    if (editingSessionId) {
+      onUpdateSession(editingSessionId, sessionLabelInput.trim() || null);
+      setEditingSessionId(null);
+    }
   };
 
   return (
@@ -215,9 +233,10 @@ export default function GradingForm({
             Belum ada sesi penilaian untuk mahasiswa ini.
           </p>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {sortedSessions.map((session, index) => {
               const isActive = session.id === activeSessionId;
+              const isEditing = session.id === editingSessionId;
               const moduleDone = modulCriteria.filter(
                 (criterion) =>
                   moduleScores[session.id]?.[criterion.id]?.finalScore != null
@@ -230,28 +249,90 @@ export default function GradingForm({
               return (
                 <div
                   key={session.id}
-                  className={`flex items-center justify-between rounded-xl border px-4 py-3 ${
+                  className={`group relative flex flex-col rounded-xl border p-4 transition-all duration-200 ${
                     isActive
-                      ? 'border-sky-300 bg-sky-50'
-                      : 'border-slate-200 bg-white'
+                      ? 'border-sky-300 bg-sky-50 shadow-sm ring-1 ring-sky-300'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
                   }`}
                 >
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    {isEditing ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <input
+                          type="text"
+                          value={sessionLabelInput}
+                          onChange={(e) => setSessionLabelInput(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSaveSessionLabel()}
+                          className="flex-1 border border-slate-200 rounded-lg px-2 py-1 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                          autoFocus
+                        />
+                        <button
+                          onClick={handleSaveSessionLabel}
+                          className="p-1 rounded-md bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setEditingSessionId(null)}
+                          className="p-1 rounded-md bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 group/label">
+                          <h4 className="text-sm font-bold text-slate-800 truncate">
+                            {session.label || `Sesi ${index + 1}`}
+                          </h4>
+                          <button
+                            onClick={() => handleStartEditSession(session, index)}
+                            className="p-1 rounded-md text-slate-300 hover:text-sky-500 hover:bg-sky-100 transition-all opacity-0 group-hover/label:opacity-100"
+                            title="Ubah Nama Sesi"
+                          >
+                            <PencilLine className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-400 font-mono mt-0.5">
+                          {session.tglAsistensi}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {!isEditing && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => onDeleteSession(session.id)}
+                          className="p-1.5 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Hapus Sesi"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-emerald-400 transition-all duration-500" 
+                        style={{ width: `${((moduleDone + assistanceDone) / (modulCriteria.length + asisCriteria.length)) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">
+                      {Math.round(((moduleDone + assistanceDone) / (modulCriteria.length + asisCriteria.length)) * 100)}%
+                    </span>
+                  </div>
+
                   <button
                     onClick={() => onSelectSession(session.id)}
-                    className="flex-1 text-left"
+                    className={`mt-auto w-full py-2 rounded-lg text-xs font-bold transition-all ${
+                      isActive
+                        ? 'bg-sky-500 text-white shadow-md shadow-sky-100'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    }`}
                   >
-                    <p className="text-sm font-semibold text-slate-700">
-                      Sesi {index + 1}
-                    </p>
-                    <p className="text-xs text-slate-400 font-mono">
-                      {session.tglAsistensi} &middot; Modul {moduleDone}/{modulCriteria.length} &middot; Asistensi {assistanceDone}/{asisCriteria.length}
-                    </p>
-                  </button>
-                  <button
-                    onClick={() => onDeleteSession(session.id)}
-                    className="ml-3 inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500"
-                  >
-                    <Trash2 className="w-4 h-4" />
+                    {isActive ? 'Sedang Dinilai' : 'Pilih Sesi'}
                   </button>
                 </div>
               );

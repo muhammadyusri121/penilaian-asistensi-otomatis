@@ -10,6 +10,7 @@ export interface AssistanceSession {
   id: string;
   studentId: string;
   tglAsistensi: string;
+  label?: string | null;
 }
 
 export interface CriterionScore {

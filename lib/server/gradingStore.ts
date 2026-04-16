@@ -18,6 +18,7 @@ interface AssistanceSessionRow {
   id: number;
   student_id: number;
   tgl_asistensi: string;
+  label: string | null;
 }
 
 interface SessionScoreRow {
@@ -48,6 +49,7 @@ function mapSession(row: AssistanceSessionRow): AssistanceSession {
     id: String(row.id),
     studentId: String(row.student_id),
     tglAsistensi: row.tgl_asistensi,
+    label: row.label,
   };
 }
 
@@ -89,7 +91,7 @@ export async function getGradingSnapshot(
   const studentIds = students.map((student) => Number(student.id));
   const sessionResult = await db
     .from('assistance_sessions')
-    .select('id, student_id, tgl_asistensi')
+    .select('id, student_id, tgl_asistensi, label')
     .in('student_id', studentIds)
     .order('tgl_asistensi', { ascending: true })
     .order('id', { ascending: true });
@@ -283,6 +285,31 @@ export async function deleteSession(sessionId: string, ownerUsername: string) {
     .delete()
     .eq('id', ownedSessionId);
   if (result.error) throw result.error;
+}
+
+export async function updateSession(
+  sessionId: string,
+  label: string | null,
+  ownerUsername: string
+): Promise<AssistanceSession> {
+  const db = getDb();
+  const ownedSessionId = await getOwnedSessionId(sessionId, ownerUsername);
+  if (!ownedSessionId) {
+    throw new Error('SESI_TIDAK_DITEMUKAN');
+  }
+
+  const result = await db
+    .from('assistance_sessions')
+    .update({ label })
+    .eq('id', ownedSessionId)
+    .select('id, student_id, tgl_asistensi, label')
+    .single();
+
+  if (result.error || !result.data) throw result.error;
+  return mapSession({
+    ...(result.data as AssistanceSessionRow),
+    tgl_asistensi: String(result.data.tgl_asistensi),
+  });
 }
 
 async function upsertSessionScore(

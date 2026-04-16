@@ -349,6 +349,39 @@ export default function GradingSystem({ currentUser }: GradingSystemProps) {
     [activeStudentId]
   );
 
+  const handleUpdateSession = useCallback(async (sessionId: string, label: string | null) => {
+    setSyncError('');
+
+    try {
+      const response = await fetch(`/api/assistances/${sessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Gagal memperbarui sesi.');
+      }
+
+      const updatedSession = data.session as AssistanceSession;
+      setSessions((prev) => {
+        const studentId = updatedSession.studentId;
+        return {
+          ...prev,
+          [studentId]: (prev[studentId] || []).map((s) =>
+            s.id === sessionId ? updatedSession : s
+          ),
+        };
+      });
+    } catch (error) {
+      console.error(error);
+      setSyncError(
+        error instanceof Error ? error.message : 'Gagal memperbarui sesi.'
+      );
+    }
+  }, []);
+
   const persistScore = useCallback(
     async (
       endpoint: '/api/scores' | '/api/assistance-scores',
@@ -679,6 +712,7 @@ export default function GradingSystem({ currentUser }: GradingSystemProps) {
                 onSelectSession={setActiveSessionId}
                 onAddSession={handleAddSession}
                 onDeleteSession={handleDeleteSession}
+                onUpdateSession={handleUpdateSession}
                 onUpdateStudent={handleUpdateStudent}
                 onModuleScoreChange={handleModuleScoreChange}
                 onAssistanceScoreChange={handleAssistanceScoreChange}
