@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { CalendarPlus2, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { CalendarPlus2, Trash2, UserCog2, Check, X } from 'lucide-react';
 import { gradingConfig } from '@/lib/gradingConfig';
 import CriteriaGroup from './CriteriaGroup';
 import ScoreSummary from './ScoreSummary';
@@ -23,6 +23,7 @@ interface GradingFormProps {
   onSelectSession: (sessionId: string) => void;
   onAddSession: (tglAsistensi: string) => void;
   onDeleteSession: (sessionId: string) => void;
+  onUpdateStudent: (id: string, nim: string, nama: string) => void;
   onModuleScoreChange: (criterionId: string, score: CriterionScore) => void;
   onAssistanceScoreChange: (criterionId: string, score: CriterionScore) => void;
 }
@@ -38,11 +39,21 @@ export default function GradingForm({
   onSelectSession,
   onAddSession,
   onDeleteSession,
+  onUpdateStudent,
   onModuleScoreChange,
   onAssistanceScoreChange,
 }: GradingFormProps) {
   const [activeTab, setActiveTab] = useState<TabType>('modul');
   const [newSessionDate, setNewSessionDate] = useState('');
+  const [isEditingStudent, setIsEditingStudent] = useState(false);
+  const [editNim, setEditNim] = useState(student.nim);
+  const [editNama, setEditNama] = useState(student.nama);
+
+  useEffect(() => {
+    setEditNim(student.nim);
+    setEditNama(student.nama);
+    setIsEditingStudent(false);
+  }, [student]);
 
   const modulGroups = gradingConfig.filter((g) => g.type === 'modul');
   const asisGroups = gradingConfig.filter((g) => g.type === 'asistensi');
@@ -81,21 +92,82 @@ export default function GradingForm({
     setNewSessionDate('');
   };
 
+  const handleSaveStudent = () => {
+    if (!editNim.trim() || !editNama.trim()) return;
+    onUpdateStudent(student.id, editNim.trim(), editNama.trim());
+    setIsEditingStudent(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditNim(student.nim);
+    setEditNama(student.nama);
+    setIsEditingStudent(false);
+  };
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex-1">
           <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-0.5">
             Mahasiswa Aktif
           </p>
-          <h2 className="text-xl font-extrabold text-slate-800">
-            {student.nama}
-          </h2>
-          <p className="text-sm text-slate-500 font-mono">{student.nim}</p>
+          {isEditingStudent ? (
+            <div className="space-y-2 max-w-sm">
+              <input
+                type="text"
+                value={editNama}
+                onChange={(e) => setEditNama(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                placeholder="Nama Lengkap"
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={editNim}
+                  onChange={(e) => setEditNim(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs font-mono text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                  placeholder="NIM"
+                />
+                <button
+                  onClick={handleSaveStudent}
+                  className="p-1.5 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+                  title="Simpan"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="p-1.5 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
+                  title="Batal"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="group flex items-start gap-3">
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-800">
+                  {student.nama}
+                </h2>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-slate-500 font-mono">{student.nim}</p>
+                  <button
+                    onClick={() => setIsEditingStudent(true)}
+                    className="p-1 rounded-md text-slate-300 hover:text-sky-500 hover:bg-sky-50 transition-all opacity-0 group-hover:opacity-100"
+                    title="Edit Nama/NIM"
+                  >
+                    <UserCog2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         <div className="hidden sm:block">
           <ScoreSummary
             sessions={sessions}
+            activeSessionId={activeSessionId}
             moduleScores={moduleScores}
             assistanceScores={assistanceScores}
             activeTab={activeTab}
@@ -106,6 +178,7 @@ export default function GradingForm({
       <div className="block sm:hidden">
         <ScoreSummary
           sessions={sessions}
+          activeSessionId={activeSessionId}
           moduleScores={moduleScores}
           assistanceScores={assistanceScores}
           activeTab={activeTab}

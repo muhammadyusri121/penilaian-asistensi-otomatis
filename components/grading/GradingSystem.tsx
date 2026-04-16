@@ -200,6 +200,33 @@ export default function GradingSystem({ currentUser }: GradingSystemProps) {
     }
   }, []);
 
+  const handleUpdateStudent = useCallback(async (id: string, nim: string, nama: string) => {
+    setSyncError('');
+
+    try {
+      const response = await fetch(`/api/students/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nim, nama }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Gagal memperbarui mahasiswa.');
+      }
+
+      const updatedStudent = data.student as Student;
+      setStudents((prev) =>
+        prev.map((s) => (s.id === id ? updatedStudent : s))
+      );
+    } catch (error) {
+      console.error(error);
+      setSyncError(
+        error instanceof Error ? error.message : 'Gagal memperbarui mahasiswa.'
+      );
+    }
+  }, []);
+
   const handleDeleteStudent = useCallback(
     async (studentId: string) => {
       setSyncError('');
@@ -652,6 +679,7 @@ export default function GradingSystem({ currentUser }: GradingSystemProps) {
                 onSelectSession={setActiveSessionId}
                 onAddSession={handleAddSession}
                 onDeleteSession={handleDeleteSession}
+                onUpdateStudent={handleUpdateStudent}
                 onModuleScoreChange={handleModuleScoreChange}
                 onAssistanceScoreChange={handleAssistanceScoreChange}
               />

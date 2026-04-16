@@ -9,6 +9,7 @@ import type {
 
 interface ScoreSummaryProps {
   sessions: AssistanceSession[];
+  activeSessionId: string | null;
   moduleScores: ModuleScores;
   assistanceScores: AssistanceScores;
   activeTab: 'modul' | 'asistensi' | 'all';
@@ -16,6 +17,7 @@ interface ScoreSummaryProps {
 
 export default function ScoreSummary({
   sessions,
+  activeSessionId,
   moduleScores,
   assistanceScores,
   activeTab,
@@ -30,14 +32,19 @@ export default function ScoreSummary({
   const maxModul = getMaxTotalForType('modul');
   const maxAsistensi = getMaxTotalForType('asistensi');
 
-  const moduleSessionTotals = sessions.map((session) =>
+  // Filter sessions to only the active one if specified
+  const calculationSessions = activeSessionId
+    ? sessions.filter((s) => s.id === activeSessionId)
+    : sessions;
+
+  const moduleSessionTotals = calculationSessions.map((session) =>
     modulCriteria.reduce(
       (sum, criterion) =>
         sum + (moduleScores[session.id]?.[criterion.id]?.finalScore ?? 0),
       0
     )
   );
-  const assistanceSessionTotals = sessions.map((session) =>
+  const assistanceSessionTotals = calculationSessions.map((session) =>
     asisCriteria.reduce(
       (sum, criterion) =>
         sum + (assistanceScores[session.id]?.[criterion.id]?.finalScore ?? 0),
@@ -76,7 +83,16 @@ export default function ScoreSummary({
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-5">
-      <h3 className="text-sm font-bold text-slate-800">Ringkasan Nilai</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-slate-800">
+          {activeSessionId ? 'Ringkasan Nilai Sesi' : 'Ringkasan Nilai Rata-rata'}
+        </h3>
+        {activeSessionId && (
+          <span className="text-[10px] font-bold px-2 py-0.5 bg-sky-100 text-sky-700 rounded-full uppercase">
+            Sesi Aktif
+          </span>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <SummaryCard
@@ -132,12 +148,16 @@ export default function ScoreSummary({
         </div>
       </div>
 
-      <div className="border-t border-slate-100 pt-3 text-xs text-slate-500">
-        <p>{completedSessions} / {sessions.length} sesi penilaian lengkap</p>
+      <div className="border-t border-slate-100 pt-3 text-xs text-slate-500 flex justify-between items-center">
+        <p>{completedSessions} / {sessions.length} sesi lengkap</p>
+        {!activeSessionId && sessions.length > 1 && (
+          <span className="text-[10px] text-slate-400 italic">Rata-rata dari {sessions.length} sesi</span>
+        )}
       </div>
     </div>
   );
 }
+
 
 function getGrade(value: number) {
   if (value >= 85) return { label: 'A', color: 'text-emerald-600' };

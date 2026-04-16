@@ -161,6 +161,29 @@ export async function createStudent(
   return mapStudent(result.data as StudentRow);
 }
 
+export async function updateStudent(
+  studentId: string,
+  nim: string,
+  nama: string,
+  ownerUsername: string
+): Promise<Student> {
+  const db = getDb();
+  const ownedStudentId = await getOwnedStudentId(studentId, ownerUsername);
+  if (!ownedStudentId) {
+    throw new Error('MAHASISWA_TIDAK_DITEMUKAN');
+  }
+
+  const result = await db
+    .from('students')
+    .update({ nim, nama })
+    .eq('id', ownedStudentId)
+    .select('id, nim, nama, owner_username')
+    .single();
+
+  if (result.error || !result.data) throw result.error;
+  return mapStudent(result.data as StudentRow);
+}
+
 export async function deleteStudent(studentId: string, ownerUsername: string) {
   const db = getDb();
   const ownedStudentId = await getOwnedStudentId(studentId, ownerUsername);
