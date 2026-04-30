@@ -385,33 +385,24 @@ export default function GradingSystem({ currentUser }: GradingSystemProps) {
       sessionId: string,
       score: CriterionScore
     ) => {
-      setIsSyncing(true);
       const keyName =
         endpoint === '/api/scores' ? 'assistanceSessionId' : 'assistanceSessionId';
 
-      try {
-        const response = await fetch(endpoint, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            [keyName]: sessionId,
-            criterionId: score.criterionId,
-            quickSelect: score.quickSelect,
-            manualValue: score.manualValue,
-            finalScore: score.finalScore,
-          }),
-        });
-        const data = await response.json();
+      const response = await fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          [keyName]: sessionId,
+          criterionId: score.criterionId,
+          quickSelect: score.quickSelect,
+          manualValue: score.manualValue,
+          finalScore: score.finalScore,
+        }),
+      });
+      const data = await response.json();
 
-        if (!response.ok) {
-          throw new Error(data.error || 'Gagal menyimpan nilai.');
-        }
-      } finally {
-        // Cek apakah masih ada timer aktif lainnya sebelum mematikan status syncing
-        const activeTimers = Object.keys(saveTimersRef.current).length;
-        if (activeTimers === 0) {
-          setIsSyncing(false);
-        }
+      if (!response.ok) {
+        throw new Error(data.error || 'Gagal menyimpan nilai.');
       }
     },
     []
@@ -421,6 +412,7 @@ export default function GradingSystem({ currentUser }: GradingSystemProps) {
     (criterionId: string, score: CriterionScore) => {
       if (!activeSessionId) return;
       setSyncError('');
+      setIsSyncing(true); // Langsung tunjukkan status syncing
 
       setModuleScores((prev) => ({
         ...prev,
@@ -445,6 +437,10 @@ export default function GradingSystem({ currentUser }: GradingSystemProps) {
           );
         } finally {
           delete saveTimersRef.current[timerKey];
+          // Cek jika tidak ada lagi timer yang menunggu, set status ke synced
+          if (Object.keys(saveTimersRef.current).length === 0) {
+            setIsSyncing(false);
+          }
         }
       }, 400);
     },
@@ -455,6 +451,7 @@ export default function GradingSystem({ currentUser }: GradingSystemProps) {
     (criterionId: string, score: CriterionScore) => {
       if (!activeSessionId) return;
       setSyncError('');
+      setIsSyncing(true); // Langsung tunjukkan status syncing
 
       setAssistanceScores((prev) => ({
         ...prev,
@@ -481,6 +478,10 @@ export default function GradingSystem({ currentUser }: GradingSystemProps) {
           );
         } finally {
           delete saveTimersRef.current[timerKey];
+          // Cek jika tidak ada lagi timer yang menunggu, set status ke synced
+          if (Object.keys(saveTimersRef.current).length === 0) {
+            setIsSyncing(false);
+          }
         }
       }, 400);
     },
