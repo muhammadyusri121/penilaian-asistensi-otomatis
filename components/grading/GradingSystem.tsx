@@ -7,6 +7,11 @@ import {
   KeyRound,
   LogOut,
   TriangleAlert as AlertTriangle,
+  Cloud,
+  CloudUpload,
+  CloudOff,
+  Settings,
+  ChevronDown,
 } from 'lucide-react';
 import { gradingConfig } from '@/lib/gradingConfig';
 import { exportStudentToExcel } from '@/lib/exportExcel';
@@ -45,6 +50,7 @@ export default function GradingSystem({ currentUser }: GradingSystemProps) {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const saveTimersRef = useRef<Record<string, number>>({});
 
   const moduleCriteria = gradingConfig
@@ -158,19 +164,10 @@ export default function GradingSystem({ currentUser }: GradingSystemProps) {
   const currentSessions = activeStudentId ? sessions[activeStudentId] || [] : [];
 
   useEffect(() => {
-    if (!activeStudentId) {
-      setActiveSessionId(null);
-      return;
-    }
-
-    const studentSessions = sessions[activeStudentId] || [];
-    setActiveSessionId((current) => {
-      if (current && studentSessions.some((session) => session.id === current)) {
-        return current;
-      }
-      return studentSessions[0]?.id ?? null;
-    });
-  }, [activeStudentId, sessions]);
+    // Setiap kali mahasiswa aktif berubah, reset sesi menjadi null
+    // agar user harus memilih sesi secara manual (mencegah salah nilai)
+    setActiveSessionId(null);
+  }, [activeStudentId]);
 
   const handleAddStudent = useCallback(async (nim: string, nama: string) => {
     setSyncError('');
@@ -388,24 +385,33 @@ export default function GradingSystem({ currentUser }: GradingSystemProps) {
       sessionId: string,
       score: CriterionScore
     ) => {
+      setIsSyncing(true);
       const keyName =
         endpoint === '/api/scores' ? 'assistanceSessionId' : 'assistanceSessionId';
 
-      const response = await fetch(endpoint, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          [keyName]: sessionId,
-          criterionId: score.criterionId,
-          quickSelect: score.quickSelect,
-          manualValue: score.manualValue,
-          finalScore: score.finalScore,
-        }),
-      });
-      const data = await response.json();
+      try {
+        const response = await fetch(endpoint, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            [keyName]: sessionId,
+            criterionId: score.criterionId,
+            quickSelect: score.quickSelect,
+            manualValue: score.manualValue,
+            finalScore: score.finalScore,
+          }),
+        });
+        const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Gagal menyimpan nilai.');
+        if (!response.ok) {
+          throw new Error(data.error || 'Gagal menyimpan nilai.');
+        }
+      } finally {
+        // Cek apakah masih ada timer aktif lainnya sebelum mematikan status syncing
+        const activeTimers = Object.keys(saveTimersRef.current).length;
+        if (activeTimers === 0) {
+          setIsSyncing(false);
+        }
       }
     },
     []
@@ -548,137 +554,155 @@ export default function GradingSystem({ currentUser }: GradingSystemProps) {
   }, 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50 to-slate-100">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-4 space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-sky-500 flex items-center justify-center shadow-sm">
-                <GraduationCap className="w-5 h-5 text-white" />
+    <div className="min-h-screen bg-[#f8fafc]">
+      <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-md border-b border-slate-200">
+        <div className="max-w-screen-xl mx-auto px-4">
+          <div className="h-20 flex items-center justify-between gap-4">
+            {/* Logo Section */}
+            <div className="flex items-center gap-4">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-600 to-sky-400 flex items-center justify-center shadow-lg shadow-sky-100 ring-4 ring-sky-50">
+                <GraduationCap className="w-6 h-6 text-white" />
               </div>
-              <div>
-                <h1 className="text-base font-extrabold text-slate-900 leading-tight">
-                  Sistem Penilaian Praktikum
+              <div className="hidden sm:block">
+                <h1 className="text-lg font-black text-slate-800 tracking-tight leading-none mb-1">
+                  ASISTENSI<span className="text-sky-500">PRO</span>
                 </h1>
-                <p className="text-xs text-slate-500">
-                  Selamat datang, <span className="font-semibold">{currentUser.fullName}</span>
-                  <span className="text-slate-400"> ({currentUser.username})</span>
-                </p>
-                <p className="text-xs text-slate-400">
-                  {completeSessionCount > 0
-                    ? `${completeSessionCount} sesi penilaian lengkap`
-                    : 'Tambahkan mahasiswa untuk memulai'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              {(exportError || syncError || loadError) && (
-                <div className="hidden md:flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl max-w-xs">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  <span className="line-clamp-2">{loadError || syncError || exportError}</span>
+                <div className="flex items-center gap-2">
+                  <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                    Online Server Ready
+                  </p>
                 </div>
-              )}
-              <button
-                onClick={() => {
-                  setShowPasswordForm((prev) => !prev);
-                  setPasswordError('');
-                  setPasswordSuccess('');
-                }}
-                className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-sm rounded-xl px-4 py-2.5 transition-colors shadow-sm"
-              >
-                <KeyRound className="w-4 h-4" />
-                <span className="hidden sm:inline">Ubah Sandi</span>
-              </button>
-              <button
-                onClick={handleExport}
-                disabled={!activeStudent || isLoading}
-                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl px-4 py-2.5 transition-colors shadow-sm"
-              >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Export Nilai Mahasiswa</span>
-                <span className="sm:hidden">Export</span>
-              </button>
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm rounded-xl px-4 py-2.5 transition-colors shadow-sm"
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
+              </div>
+            </div>
+
+            {/* Sync Status */}
+            <div className="flex-1 flex justify-center px-4">
+              <div className={`flex items-center gap-3 px-4 py-2 rounded-2xl border transition-all duration-300 ${syncError
+                  ? 'bg-rose-50 border-rose-200 text-rose-600'
+                  : isSyncing
+                    ? 'bg-sky-50 border-sky-100 text-sky-600'
+                    : 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                }`}>
+                {syncError ? (
+                  <CloudOff className="w-4 h-4 animate-bounce" />
+                ) : isSyncing ? (
+                  <CloudUpload className="w-4 h-4 animate-pulse" />
+                ) : (
+                  <Cloud className="w-4 h-4" />
+                )}
+                <div className="hidden md:block">
+                  <p className="text-[10px] font-black uppercase tracking-tighter leading-none mb-0.5">
+                    Database Status
+                  </p>
+                  <p className="text-xs font-bold leading-none">
+                    {syncError ? 'Sync Failed' : isSyncing ? 'Uploading...' : 'All Synced'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* User Section */}
+            <div className="flex items-center gap-2">
+              <div className="hidden md:flex flex-col items-end mr-2">
+                <p className="text-sm font-bold text-slate-800 leading-none">{currentUser.fullName}</p>
+                <p className="text-[10px] font-medium text-slate-400">{currentUser.username}</p>
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+                <button
+                  onClick={handleExport}
+                  disabled={!activeStudent || isLoading}
+                  className="p-2 rounded-xl text-slate-600 hover:bg-white hover:text-emerald-600 hover:shadow-sm transition-all disabled:opacity-30"
+                  title="Export Data"
+                >
+                  <Download className="w-5 h-5" />
+                </button>
+
+                <div className="w-px h-6 bg-slate-200 mx-1" />
+
+                <button
+                  onClick={() => setShowPasswordForm(!showPasswordForm)}
+                  className="p-2 rounded-xl text-slate-600 hover:bg-white hover:text-sky-600 hover:shadow-sm transition-all"
+                  title="Settings"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
+
+                <button
+                  onClick={handleLogout}
+                  className="p-2 rounded-xl text-slate-600 hover:bg-rose-50 hover:text-rose-600 transition-all"
+                  title="Logout"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </div>
 
-          {showPasswordForm && (
-            <form
-              onSubmit={handleChangePassword}
-              className="bg-slate-50 border border-slate-200 rounded-2xl p-4"
-            >
-              <p className="text-sm font-semibold text-slate-700 mb-3">Ubah Sandi Akun</p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <input
-                  type="password"
-                  placeholder="Password lama"
-                  value={currentPassword}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
-                />
-                <input
-                  type="password"
-                  placeholder="Password baru"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
-                />
-                <input
-                  type="password"
-                  placeholder="Konfirmasi password baru"
-                  value={confirmNewPassword}
-                  onChange={(event) => setConfirmNewPassword(event.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
-                />
+          {/* Collapsible Content Section (Password Form & Errors) */}
+          <div className="pb-4 space-y-4">
+            {showPasswordForm && (
+              <form
+                onSubmit={handleChangePassword}
+                className="bg-slate-50 border border-slate-200 rounded-2xl p-4 shadow-inner"
+              >
+                <p className="text-sm font-semibold text-slate-700 mb-3 text-center sm:text-left">Ubah Sandi Akun</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <input
+                    type="password"
+                    placeholder="Password lama"
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Password baru"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Konfirmasi password baru"
+                    value={confirmNewPassword}
+                    onChange={(event) => setConfirmNewPassword(event.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                  />
+                </div>
+                {(passwordError || passwordSuccess) && (
+                  <p className={`mt-3 text-xs text-center sm:text-left font-semibold ${passwordError ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    {passwordError || passwordSuccess}
+                  </p>
+                )}
+                <div className="mt-4 flex items-center justify-center sm:justify-start gap-2">
+                  <button
+                    type="submit"
+                    disabled={isChangingPassword}
+                    className="bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-300 text-white text-sm font-bold rounded-xl px-6 py-2 shadow-md shadow-indigo-100 transition-all"
+                  >
+                    {isChangingPassword ? 'Menyimpan...' : 'Simpan Sandi'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordForm(false)}
+                    className="bg-white border border-slate-200 text-slate-600 text-sm font-bold rounded-xl px-6 py-2 hover:bg-slate-50 transition-all"
+                  >
+                    Batal
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {(exportError || syncError || loadError) && (
+              <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span className="font-medium">{loadError || syncError || exportError}</span>
               </div>
-              {(passwordError || passwordSuccess) && (
-                <p
-                  className={`mt-3 text-xs ${
-                    passwordError ? 'text-rose-600' : 'text-emerald-600'
-                  }`}
-                >
-                  {passwordError || passwordSuccess}
-                </p>
-              )}
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  type="submit"
-                  disabled={isChangingPassword}
-                  className="bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-300 text-white text-sm font-semibold rounded-xl px-4 py-2"
-                >
-                  {isChangingPassword ? 'Menyimpan...' : 'Simpan Sandi'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPasswordForm(false);
-                    setPasswordError('');
-                    setPasswordSuccess('');
-                  }}
-                  className="bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-xl px-4 py-2"
-                >
-                  Batal
-                </button>
-              </div>
-            </form>
-          )}
+            )}
+          </div>
         </div>
-
-        {(exportError || syncError || loadError) && (
-          <div className="md:hidden px-4 pb-3">
-            <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-              <span>{loadError || syncError || exportError}</span>
-            </div>
-          </div>
-        )}
       </header>
 
       <main className="max-w-screen-xl mx-auto px-4 sm:px-6 py-8">
