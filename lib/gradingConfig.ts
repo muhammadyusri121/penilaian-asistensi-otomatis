@@ -231,22 +231,15 @@ export const gradingConfig: CriteriaGroup[] = [
     ],
   },
   {
-    id: 'asis_plagiarisme',
+    id: 'asis_tugas',
     type: 'asistensi',
-    title: 'Plagiarisme',
+    title: 'Kesesuaian Tugas Praktikan Dengan Soal Yang Diberikan',
     criteria: [
       {
         id: 'asis_plagiarisme',
         name: 'Plagiarisme',
         maxScore: 10,
       },
-    ],
-  },
-  {
-    id: 'asis_tugas',
-    type: 'asistensi',
-    title: 'Kesesuaian Tugas Praktikan Dengan Soal Yang Diberikan',
-    criteria: [
       {
         id: 'asis_tugas_modul',
         name: 'Kesesuaian Tugas dengan Materi yang terdapat pada Modul',
